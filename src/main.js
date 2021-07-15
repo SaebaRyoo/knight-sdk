@@ -11,13 +11,8 @@ _.clone = clone
 _.isFunction = isFunction
 _.merge = merge
 
-const feeTarget = 'https://test.com/dig' // 打点服务器，或Nginx地址
-
-// pid string 工程id:platfe_saas
-// uuid string 用户信息
-// ucid string 用户信息
-// ssid string 用户信息
-// mac string mac地址
+// 打点服务器
+const knightTarget = 'https://test.com/dig'
 
 // 测试标记符
 const TEST_FLAG = 'b47ca710747e96f1c523ebab8022c19e9abaa56b'
@@ -45,6 +40,11 @@ const JS_TRACKER_ERROR_DISPLAY_MAP = {
     8: 'TRY_CATCH_ERROR'
 }
 
+// pid string 工程id:platfe_saas
+// uuid string 用户信息
+// ucid string 用户信息
+// ssid string 用户信息
+// mac string mac地址
 // 默认配置
 const DEFAULT_CONFIG = {
     pid: '', // [必填]项目id, 由灯塔项目组统一分配
@@ -53,7 +53,6 @@ const DEFAULT_CONFIG = {
 
     is_test: false, // 是否为测试数据, 默认为false(测试模式下打点数据仅供浏览, 不会展示在系统中)
     record: {
-        time_on_page: true, // 是否监控用户在线时长数据, 默认为true
         performance: true, // 是否监控页面载入性能, 默认为true
         js_error: true, //  是否监控页面报错信息, 默认为true
         // 配置需要监控的页面报错类别, 仅在js_error为true时生效, 默认均为true(可以将配置改为false, 以屏蔽不需要上报的错误类别)
@@ -83,7 +82,7 @@ const DEFAULT_CONFIG = {
     // test.com/detail/3.html
     // ...
     // 这种页面来说, 虽然url不同, 但他们本质上是同一个页面
-    // 因此需要业务方传入一个处理函数, 根据当前url解析出真实的页面类型(例如: 二手房列表/经纪人详情页), 以便灯塔系统对错误来源进行分类
+    // 因此需要业务方传入一个处理函数, 根据当前url解析出真实的页面类型(例如: 二手房列表/经纪人详情页), 以便系统对错误来源进行分类
     // getPageType函数执行时会被传入一个location对象, 业务方需要完成该函数, 返回对应的的页面类型(50字以内, 建议返回汉字, 方便查看), 默认是返回当前页面的url
     getPageType: (location = window.location) => { return `${location.host}${location.pathname}` }
 }
@@ -101,6 +100,7 @@ const clog = (text) => {
     console.log(`%c ${text}`, 'color:red')
 }
 
+// 校验合法性
 const validLog = (type = '', code, detail = {}, extra = {}) => {
     const pid = _.get(commonConfig, ['pid'], '')
     if (!pid) {
@@ -182,7 +182,7 @@ const detailAdapter = (code, detail = {}) => {
 }
 
 /**
- *
+ * 图片打点的方式上传日志
  * @param {类型} type
  * @param {code码} code
  * @param {消费数据} detail
@@ -225,7 +225,7 @@ const log = (type = '', code, detail = {}, extra = {}) => {
     }
     // 图片打点
     const img = new window.Image()
-    img.src = `${feeTarget}?d=${encodeURIComponent(JSON.stringify(logInfo))}`
+    img.src = `${knightTarget}?d=${encodeURIComponent(JSON.stringify(logInfo))}`
 }
 
 // 日志设置
@@ -334,19 +334,23 @@ jstracker.init({
                 stack
             })
 
-            log('error', 7, {
-                error_no: errorName,
-                url: `${location.host}${location.pathname}`
-            }, {
-                desc,
-                stack
-            })
+            log.error(
+                7, 
+                {
+                    error_no: errorName,
+                    url: `${location.host}${location.pathname}`
+                }, 
+                {
+                    desc,
+                    stack
+                }
+            )
         }
     }
 })
 
 window.onload = () => {
-  // 检查是否监控性能指标
+    // 检查是否监控性能指标
     const isPerformanceFlagOn = _.get(
         commonConfig,
         ['record', 'performance'],
@@ -372,42 +376,11 @@ window.onload = () => {
         url: `${window.location.host}${window.location.pathname}`
     })
 
-    log('perf', 20001, {
+    log.perf(20001, {
         ...times,
         url: `${window.location.host}${window.location.pathname}`
     })
 }
-
-// 用户在线时长统计
-const OFFLINE_MILL = 15 * 60 * 1000 // 15分钟不操作认为不在线
-const SEND_MILL = 5 * 1000 // 每5s打点一次
-
-let lastTime = Date.now()
-window.addEventListener('click', () => {
-  // 检查是否监控用户在线时长
-    const isTimeOnPageFlagOn = _.get(
-        commonConfig,
-        ['record', 'time_on_page'],
-        _.get(DEFAULT_CONFIG, ['record', 'time_on_page'])
-    )
-    const isOldTimeOnPageFlagOn = _.get(commonConfig, ['online'], false)
-    const needRecordTimeOnPage = isTimeOnPageFlagOn || isOldTimeOnPageFlagOn
-    if (needRecordTimeOnPage === false) {
-        debugLogger(`config.record.time_on_page值为false, 跳过停留时长打点`)
-        return
-    }
-
-    const now = Date.now()
-    const duration = now - lastTime
-    if (duration > OFFLINE_MILL) {
-        lastTime = Date.now()
-    } else if (duration > SEND_MILL) {
-        lastTime = Date.now()
-        debugLogger('发送用户留存时间埋点, 埋点内容 => ', { duration_ms: duration })
-        // 用户在线时长
-        log.product(10001, { duration_ms: duration })
-    }
-}, false)
 
 /**
  * JS错误手动上报接口
@@ -477,7 +450,7 @@ function notify (errorName = '', url = '', extraInfo = {}) {
     }
 
     debugLogger('发送自定义错误数据, 上报内容 => ', { detail, extra })
-    return log('error', 8, detail, extra)
+    return log.error(7, detail, extra)
 }
 log.notify = notify
 
@@ -508,6 +481,9 @@ export const Plog = log.product = (code, detail, extra) => {
 }
 export const Ilog = log.info = (code, detail, extra) => {
     return log('info', code, detail, extra)
+}
+export const PerfLog = log.perf = (code, detail, extra) => {
+    return log('perf', code, detail, extra)
 }
 
 export default log

@@ -4,13 +4,13 @@ import {
     merge
 } from "../../utils/index";
 
-let monitor = {};
+let jstracker = {};
 
-monitor.tryJS = tryJS
+jstracker.tryJS = tryJS
 
 setting({ handleTryCatchError: handleTryCatchError })
 
-monitor.init = function (opts) {
+jstracker.init = function (opts) {
     __config(opts)
     __init()
 }
@@ -56,20 +56,21 @@ function __config (opts) {
 }
 
 function __init () {
-    // 监听资源加载错误(JavaScript Scource failed to load)
+    // onerror会被覆盖, 因此转为使用Listener进行监控
     window.addEventListener('error', function (event) {
         // 过滤 target 为 window 的异常，避免与上面的 onerror 重复
         let errorTarget = event.target
         if (errorTarget !== window && errorTarget.nodeName && LOAD_ERROR_TYPE[errorTarget.nodeName.toUpperCase()]) {
+            // 1. 监听资源加载错误(JavaScript Scource failed to load)
             handleError(formatLoadError(errorTarget))
         } else {
-            // onerror会被覆盖, 因此转为使用Listener进行监控
             let { message, filename, lineno, colno, error } = event
+            // 2. js 运行错误
             handleError(formatRuntimerError(message, filename, lineno, colno, error))
         }
     }, true)
 
-    //监听开发中浏览器中捕获到未处理的Promise错误
+    // 3. 监听开发中浏览器中捕获到未处理的Promise错误
     window.addEventListener('unhandledrejection', function (event) {
         console.log('Unhandled Rejection at:', event.promise, 'reason:', event.reason);
         handleError(event)
@@ -177,4 +178,4 @@ function needReport (sampling) {
     return Math.random() < (sampling || 1)
 }
 
-export default monitor
+export default jstracker
