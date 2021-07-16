@@ -1,6 +1,6 @@
 {
   "name": "knight-sdk",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "serve for knight",
   "main": "dist/knight-sdk.js",
   "module": "dist/knight-sdk.js",
